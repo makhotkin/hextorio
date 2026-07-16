@@ -48,6 +48,20 @@ data:extend{
     },
     {
         type = "sprite",
+        name = "trade-overview-buy",
+        filename = "__hextorio__/graphics/icons/trade-overview-buy.png",
+        width = 128,
+        height = 128,
+    },
+    {
+        type = "sprite",
+        name = "trade-overview-sell",
+        filename = "__hextorio__/graphics/icons/trade-overview-sell.png",
+        width = 128,
+        height = 128,
+    },
+    {
+        type = "sprite",
         name = "hex-rank-button-black",
         filename = "__hextorio__/graphics/icons/hex-rank-button-black.png",
         width = 64,

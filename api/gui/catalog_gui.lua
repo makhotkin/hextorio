@@ -32,7 +32,8 @@ function catalog_gui.register_events()
     event_system.register_gui("gui-closed", "catalog", catalog_gui.hide_catalog)
     event_system.register_gui("gui-clicked", "catalog-item", catalog_gui.on_catalog_item_click)
     event_system.register_gui("gui-clicked", "open-in-factoriopedia", catalog_gui.on_open_factoriopedia_button_click)
-    event_system.register_gui("gui-clicked", "open-in-trade-overview", catalog_gui.on_open_trade_overview_button_click)
+    event_system.register_gui("gui-clicked", "open-in-trade-overview-buy", catalog_gui.on_open_trade_overview_buy_click)
+    event_system.register_gui("gui-clicked", "open-in-trade-overview-sell", catalog_gui.on_open_trade_overview_sell_click)
     event_system.register_gui("gui-elem-changed", "selected-item-view", catalog_gui.on_catalog_search_item_selected)
     event_system.register_gui("gui-clicked", "item-buff-button", catalog_gui.on_item_buff_button_click)
     event_system.register_gui("gui-clicked", "open-item-buffs-button", catalog_gui.on_open_item_buffs_button_click)
@@ -382,22 +383,25 @@ function catalog_gui.build_header(player, rank_obj, frame)
         tags = {handlers = {["gui-elem-changed"] = "selected-item-view"}},
     }
 
-    local is_input = catalog_gui.get_expected_trade_overview_filter_side(selection.item_name)
-    local open_in_trade_overview = control_flow.add {
+    local buy_button = control_flow.add {
         type = "sprite-button",
-        name = "open-in-trade-overview",
-        sprite = "trade-overview-white",
-        tags = {handlers = {["gui-clicked"] = "open-in-trade-overview"}},
+        name = "open-in-trade-overview-buy",
+        sprite = "trade-overview-buy",
+        tooltip = {"hextorio-gui.open-in-trade-overview-input"},
+        tags = {handlers = {["gui-clicked"] = "open-in-trade-overview-buy"}},
     }
 
-    if is_input then
-        open_in_trade_overview.tooltip = {"hextorio-gui.open-in-trade-overview-input"}
-    else
-        open_in_trade_overview.tooltip = {"hextorio-gui.open-in-trade-overview-output"}
-    end
+    local sell_button = control_flow.add {
+        type = "sprite-button",
+        name = "open-in-trade-overview-sell",
+        sprite = "trade-overview-sell",
+        tooltip = {"hextorio-gui.open-in-trade-overview-output"},
+        tags = {handlers = {["gui-clicked"] = "open-in-trade-overview-sell"}},
+    }
 
     if not features.is_feature_unlocked "trade-overview" then
-        open_in_trade_overview.enabled = false
+        buy_button.enabled = false
+        sell_button.enabled = false
     end
 
     local open_in_factoriopedia = control_flow.add {
@@ -1275,10 +1279,16 @@ end
 
 ---@param player LuaPlayer
 ---@param elem LuaGuiElement
-function catalog_gui.on_open_trade_overview_button_click(player, elem)
+function catalog_gui.on_open_trade_overview_buy_click(player, elem)
     local selection = catalog_gui.get_catalog_selection(player)
-    local is_input = catalog_gui.get_expected_trade_overview_filter_side(selection.item_name)
-    event_system.trigger("catalog-trade-overview-clicked", player, selection.item_name, is_input)
+    event_system.trigger("catalog-trade-overview-clicked", player, selection.item_name, true)
+end
+
+---@param player LuaPlayer
+---@param elem LuaGuiElement
+function catalog_gui.on_open_trade_overview_sell_click(player, elem)
+    local selection = catalog_gui.get_catalog_selection(player)
+    event_system.trigger("catalog-trade-overview-clicked", player, selection.item_name, false)
 end
 
 ---@param player LuaPlayer
