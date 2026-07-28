@@ -71,42 +71,6 @@ local vanilla_planet_names = {
 
 
 
-function lib.position_to_string(x, y)
-    if not y then
-        y = x.y or x[2]
-        x = x.x or x[1]
-    end
-    return "(" .. tostring(x) .. ", " .. tostring(y) .. ")"
-end
-
-function lib.vector_add(a, b)
-    return {x=(a.x or a[1])+(b.x or b[1]), y=(a.y or a[2])+(b.y or b[2])}
-end
-
-function lib.vector_multiply(a, b)
-    return {x=(a.x or a[1]) * b, y=(a.y or a[2]) * b}
-end
-
----Get the square of the L2 (a.k.a. Euclidean) distance between two positions.
----@param pos1 MapPosition
----@param pos2 MapPosition
----@return number
-function lib.square_distance(pos1, pos2)
-    local dx = (pos1.x or pos1[1]) - (pos2.x or pos2[1])
-    local dy = (pos1.y or pos1[2]) - (pos2.y or pos2[2])
-    return dx * dx + dy * dy
-end
-
----Get the L1 (a.k.a. Manhattan) distance between the two positions.
----@param pos1 MapPosition
----@param pos2 MapPosition
----@return number
-function lib.manhattan_distance(pos1, pos2)
-    local dx = (pos1.x or pos1[1]) - (pos2.x or pos2[1])
-    local dy = (pos1.y or pos1[2]) - (pos2.y or pos2[2])
-    return math.abs(dx) + math.abs(dy)
-end
-
 ---Return integers `num` and `den` such that `num / den` is approximately equal to `x`. Computes in O(n) time where n corresponds to desired precision.
 ---@param x number
 ---@param epsilon number Minimal value of `num / (x * den)` or `x * den / num` (whichever is bigger, representing the proportional error). Should always be greater than 1.
@@ -116,7 +80,6 @@ end
 ---@return int den If `x == 0`, then this is always one. Always positive, never zero.
 function lib.get_rational_approximation(x, epsilon, max_numerator, max_denominator)
     if x == 0 then
-        -- log("returning 0 / 1")
         return 0, 1
     end
 
@@ -147,7 +110,6 @@ function lib.get_rational_approximation(x, epsilon, max_numerator, max_denominat
         end
 
         if coef == val then
-            -- log("break: " .. coef .. " == " .. val)
             break
         end
 
@@ -155,7 +117,6 @@ function lib.get_rational_approximation(x, epsilon, max_numerator, max_denominat
 
         -- Can use lib.is_ratio_symmetrically_le() here, but it's faster to check this explicitly to avoid division overhead.
         if ratio >= epsilon_inv and ratio <= epsilon then
-            -- log("break: " .. ratio .. " >= " .. epsilon_inv .. " and " .. ratio .. " <= " .. epsilon)
             break
         end
 
@@ -167,7 +128,6 @@ function lib.get_rational_approximation(x, epsilon, max_numerator, max_denominat
 
     num, den = den, num
     if den == 0 then
-        -- log("setting num=0, den=1")
         num = 0
         den = 1
     end
@@ -217,12 +177,6 @@ function lib.get_surface_id(surface)
     return -1
 end
 
-function lib.random_unit_vector(length)
-    length = length or 1
-    local angle = math.random() * 2 * math.pi
-    return {x=length*math.cos(angle), y=length*math.sin(angle)}
-end
-
 ---Linearly interpolate from `a` to `b` by the factor `t`.
 ---@param a number
 ---@param b number
@@ -230,33 +184,6 @@ end
 ---@return number
 function lib.lerp(a, b, t)
     return a + (b - a) * t
-end
-
----Linearly interpolate from `a` to `b` by the factor `t`.
----@param a MapPosition
----@param b MapPosition
----@param t number
----@return MapPosition
-function lib.lerp_positions(a, b, t)
-    -- TODO: Optimize by using variables for each coordinate instead of creating two more tables than needed to compute this.
-    local _a = {a[1] or a.x, a[2] or a.y}
-    local _b = {b[1] or b.x, b[2] or b.y}
-
-    return {
-        x = _a[1] + (_b[1] - _a[1]) * t,
-        y = _a[2] + (_b[2] - _a[2]) * t,
-    }
-end
-
----Round the position to integer coordinates, and optionally offset by 0.5.
----@param pos MapPosition
----@param offset_by_half boolean|nil
----@return MapPosition
-function lib.rounded_position(pos, offset_by_half)
-    if offset_by_half then
-        return {x = math.floor(0.5 + (pos.x or pos[1])) + 0.5, y = math.floor(0.5 + (pos.y or pos[2])) + 0.5}
-    end
-    return {x = math.floor(0.5 + (pos.x or pos[1])), y = math.floor(0.5 + (pos.y or pos[2]))}
 end
 
 ---Return `x * (1 + mult)` if mult is nonnegative.
@@ -271,7 +198,7 @@ function lib.apply_multiplier(x, mult)
 end
 
 ---@param name string
----@return boolean|string|number|Color.0|{ [1]: number, [2]: number, [3]: number, [4]: number }
+---@return boolean|string|number|Color
 function lib.startup_setting_value(name)
     local prefixedName = "hextorio-" .. name
     local v = settings.startup[prefixedName]
@@ -323,7 +250,7 @@ function lib.startup_setting_value_as_color(name)
 end
 
 ---@param name string
----@return boolean|string|number|Color.0|{ [1]: number, [2]: number, [3]: number, [4]: number }
+---@return boolean|string|number|Color
 function lib.runtime_setting_value(name)
     local prefixedName = "hextorio-" .. name
     local v = settings.global[prefixedName]
@@ -376,7 +303,7 @@ end
 
 ---@param player LuaPlayer
 ---@param name string
----@return boolean|string|number|Color.0|{ [1]: number, [2]: number, [3]: number, [4]: number }
+---@return boolean|string|number|Color
 function lib.player_setting_value(player, name)
     local s = settings.get_player_settings(player)
     local prefixedName = "hextorio-" .. name
@@ -557,36 +484,6 @@ function lib._apply_to_table_with_path(root_table, func, current_path)
     end
 end
 
-function lib.table_to_string(t, indent)
-    -- courtesy ChatGPT
-
-    indent = indent or 0  -- Keep track of indentation level
-    local result = "{\n" -- Start the table representation
-
-    for k, v in pairs(t) do
-        local key
-        if type(k) == "string" then
-            key = string.format("[\"%s\"]", k)
-        else
-            key = string.format("[%s]", tostring(k))
-        end
-
-        local value
-        if type(v) == "table" then
-            value = lib.table_to_string(v, indent + 2) -- Recursive call for nested tables
-        elseif type(v) == "string" then
-            value = string.format("\"%s\"", v)
-        else
-            value = tostring(v)
-        end
-
-        result = result .. string.rep(" ", indent + 2) .. key .. " = " .. value .. ",\n"
-    end
-
-    result = result .. string.rep(" ", indent) .. "}"
-    return result
-end
-
 function lib.color_localized_string(str, color, font)
     local rich_text
     if type(color) == "string" then
@@ -609,56 +506,26 @@ function lib.log_error(txt)
 end
 
 function lib.log(txt, error)
-    local prefix = "HEXTORIO | "
+    local prefix = ""
+
+    if game then
+        prefix = prefix .. "[tick=" .. game.tick .. "] "
+    else
+        prefix = prefix .. "[startup] "
+    end
+
     if error then
         prefix = prefix .. "ERROR: "
     end
+
     local s
     if type(txt) == "table" then
         s = prefix .. "\n" .. serpent.block(txt)
     else
         s = prefix .. tostring(txt)
     end
-    -- if error then
-    --     s = s .. "\n"
-    -- end
+
     log(s)
-end
-
--- Convert chunk position to rectangular coordinates
-function lib.chunk_to_rect(chunk_pos)
-    local top_left = {
-        x = chunk_pos.x * 32,
-        y = chunk_pos.y * 32
-    }
-
-    local bottom_right = {
-        x = top_left.x + 31,
-        y = top_left.y + 31
-    }
-
-    return top_left, bottom_right
-end
-
-function lib.get_chunk_pos_from_tile_position(pos)
-    return {x = math.floor((pos.x or pos[1]) / 32), y = math.floor((pos.y or pos[2]) / 32)}
-end
-
-function lib.get_area_for_chunk_position(chunk_pos)
-    return {
-        left_top = {
-            x = chunk_pos.x * 32,
-            y = chunk_pos.y * 32,
-        },
-        right_bottom = {
-            x = chunk_pos.x * 32 + 31,
-            y = chunk_pos.y * 32 + 31,
-        },
-    }
-end
-
-function lib.is_position_in_rect(position, top_left, bottom_right)
-    return position.x >= top_left.x and position.x <= bottom_right.x and position.y >= top_left.y and position.y <= bottom_right.y
 end
 
 function lib.unstuck_player(player)
@@ -716,6 +583,8 @@ function lib.teleport_player(player, position, surface, allow_vehicle)
     end
 
     local zoom = player.zoom
+    local opened = player.opened
+
     player.set_controller {
         type = defines.controllers.character,
         character = char,
@@ -726,6 +595,7 @@ function lib.teleport_player(player, position, surface, allow_vehicle)
     end
 
     player.zoom = zoom
+    player.opened = opened
 end
 
 ---Teleport a player to a position on a surface.  If the surface is different from the player's character's current one, then prevent teleportation if items exist in the player's inventory, or the main inventory of the player's current vehicle if they are in one.
@@ -781,12 +651,6 @@ function lib.teleport_player_cross_surface(player, position, surface, allow_vehi
     return true
 end
 
-function lib.initial_player_spawn(player)
-    if not player then return end
-    player.teleport({0, 5}, game.surfaces.nauvis)
-    lib.unstuck_player(player)
-end
-
 function lib.get_player_inventory(player)
     if not player then
         lib.log_error("get_player_inventory: player is nil")
@@ -823,30 +687,6 @@ function lib.get_player_owner_of_inventory(inventory)
     end
 
     -- No player found from inventory
-end
-
----Turn a map gen setting between 0.16667 and 6 into a number between 0 and 1, or to a specified range
----@param x number|nil
----@param to_min number | nil
----@param to_max number | nil
----@return number
-function lib.remap_map_gen_setting(x, to_min, to_max)
-    if not x then return ((to_min or 0) + (to_max or 1)) * 0.5 end
-    local v = math.log(x, 6) * 0.5 + 0.5
-    if to_min and to_max then
-        return to_min + (to_max - to_min) * v
-    end
-    return v
-end
-
-function lib.disable_everything(t)
-    for key, value in pairs(t) do
-        if key == "size" and type(value) == "number" then
-            t[key] = 0
-        elseif type(value) == "table" then
-            lib.disable_everything(value)
-        end
-    end
 end
 
 -- Check if a tile at a given position is land
@@ -912,131 +752,6 @@ function lib.get_recipe_tree()
         end
     end
     return recipe_tree
-end
-
--- Generate a graph of all recipes in the game from the recipe tree, adding useful information for advanced calculations
-function lib.get_recipe_graph(recipe_tree)
-    local recipe_graph = {
-        made_from = {},
-        used_in = {},
-        recipes_by_name = {},
-        item_edges = {},
-        all_items = {},
-    }
-
-    local added_edges = {}
-    for recipe_name, recipe in pairs(recipe_tree) do
-        recipe_graph.recipes_by_name[recipe_name] = recipe
-        for _, ing in pairs(recipe.ingredients) do
-            local t = recipe_graph.used_in[ing.name]
-            if not t then
-                t = {}
-                recipe_graph.used_in[ing.name] = t
-            end
-            table.insert(t, recipe.name)
-            if not recipe_graph.all_items[ing.name] then
-                recipe_graph.all_items[ing.name] = true
-            end
-        end
-        for _, prod in pairs(recipe.products) do
-            local t = recipe_graph.made_from[prod.name]
-            if not t then
-                t = {}
-                recipe_graph.made_from[prod.name] = t
-            end
-            table.insert(t, recipe.name)
-            if not recipe_graph.all_items[prod.name] then
-                recipe_graph.all_items[prod.name] = true
-            end
-            for _, ing in pairs(recipe.ingredients) do
-                local edge_key = ing.name .. "->" .. prod.name
-                if not added_edges[edge_key] then
-                    added_edges[edge_key] = true
-                    table.insert(recipe_graph.item_edges, {ing.name, prod.name})
-                end
-            end
-        end
-    end
-
-    recipe_graph.all_items = sets.to_array(recipe_graph.all_items)
-
-    return recipe_graph
-end
-
--- Return a table of all technologies in the game from the tech tree, adding useful information for advanced calculations
-function lib.get_technology_graph()
-    local tech_graph = {}
-    -- Each tech is of the form:
-    -- {name: name, unlocked_by: unlocked_by, unlocks: unlocks, effects: effects, required_planet: required_planet}
-
-    for name, tech in pairs(prototypes.technology) do
-        local t = {name = name, unlocks = {}, unlocked_by = {}, effects = {}, techs_by_item = {}}
-        for successor_name, _ in pairs(tech.successors) do
-            table.insert(t.unlocks, successor_name)
-        end
-        for prereq_name, _ in pairs(tech.prerequisites) do
-            table.insert(t.unlocked_by, prereq_name)
-        end
-        for _, effect in pairs(tech.effects) do
-            table.insert(t.effects, effect)
-        end
-        t.required_planet = nil -- will be calculated by DFS
-        t.required_planet_depth = math.huge
-        tech_graph[name] = t
-    end
-
-    -- Use DFS to find the latest planet discovery techs if they exist for each tech, labeling which tech comes from which planet
-    local function dfs(tech_name, depth)
-        -- each dfs call returns a planet name and depth of search
-        local tech = tech_graph[tech_name]
-
-        if not tech then
-            lib.log_error("no tech found for " .. tech_name)
-        end
-
-        -- Check if this tech has the modifier type "unlock-space-location"
-        for _, modifier in pairs(tech.effects) do
-            if modifier.type == "unlock-space-location" then
-                tech.required_planet = modifier.space_location
-                tech.required_planet_depth = depth
-                return modifier.space_location, depth
-            end
-        end
-
-        local min_depth = math.huge
-        local min_planet
-        for _, name in pairs(tech.unlocked_by) do
-            local planet, d = dfs(name, depth + 1)
-            if d < min_depth then
-                min_depth = d
-                min_planet = planet
-            end
-        end
-
-        if not min_planet then
-            min_planet = "nauvis"
-            min_depth = depth
-        end
-        if not tech.required_planet or min_depth < tech.required_planet_depth then
-            tech.required_planet = min_planet
-            tech.required_planet_depth = min_depth
-        end
-        return min_planet, min_depth
-    end
-
-    for name, tech in pairs(tech_graph) do
-        dfs(name, 0)
-        if tech.required_planet then
-            lib.log("tech " .. name .. " requires planet " .. tech.required_planet .. " at depth " .. tech.required_planet_depth)
-        else
-            lib.log_error("no planet found for tech " .. name)
-        end
-    end
-
-    -- For each recipe, list all techs which directly unlock it
-
-
-    return tech_graph
 end
 
 -- Return a lookup table of angles for a pie chart from a weighted choice
@@ -1334,10 +1049,6 @@ function lib.format_percentage(x, decimal_places, include_symbol, include_sign)
     return s
 end
 
-function lib.get_gps_str_from_hex_core(hex_core)
-    return "[gps=" .. hex_core.position.x .. "," .. hex_core.position.y .. "," .. hex_core.surface.name .. "]"
-end
-
 function lib.insert_endgame_armor(player)
     local inv = player.get_inventory(5)
 
@@ -1547,49 +1258,6 @@ function lib.is_vanilla_planet_name(surface_name)
     return vanilla_planet_names[surface_name] == true
 end
 
-function lib.sum_mgs(mgs, target, keys)
-    local sum = 0
-    for _, key in pairs(keys) do
-        if not mgs[key] then
-            lib.log_error("lib.sum_mgs: key \"" .. key .. "\" not found in " .. serpent.line(mgs))
-        elseif not mgs[key][target] then
-            lib.log_error("lib.sum_mgs: target \"" .. target .. "\" not found in " .. serpent.line(mgs[key]))
-        else
-            sum = sum + lib.remap_map_gen_setting(mgs[key][target])
-        end
-    end
-    return sum
-end
-
----Flattened a 2D array of positions that are indexed by x and y coordinates.
----@param arr MapPositionSet
----@return MapPosition[]
-function lib.flattened_position_array(arr)
-    local flat = {}
-    local idx = 1
-    for x, Y in pairs(arr) do
-        for y, _ in pairs(Y) do
-            flat[idx] = {x = x, y = y}
-            idx = idx + 1
-        end
-    end
-    return flat
-end
-
----Convert a list of positions to a 2D array indexed by x and y coordinates.
----@param arr MapPosition[]
----@return MapPositionSet
-function lib.indexed_position_array(arr)
-    local set = {}
-    for _, pos in pairs(arr) do
-        if not set[pos.x] then
-            set[pos.x] = {}
-        end
-        set[pos.x][pos.y] = true
-    end
-    return set
-end
-
 function lib.is_t2_planet(surface_name)
     return surface_name == "vulcanus" or surface_name == "fulgora" or surface_name == "gleba"
 end
@@ -1762,23 +1430,6 @@ function lib.is_tier6_quality(quality)
         return prototypes.quality.legendary.next == quality
     end
     return false
-end
-
-function lib.reservoir_sample_index(t)
-    local m = math.huge
-    local K
-    for k, v in pairs(t) do
-        local r = math.random()
-        if r < m then
-            m = r
-            K = k
-        end
-    end
-    return K
-end
-
-function lib.reservoir_sample(t)
-    return t[lib.reservoir_sample_index(t)]
 end
 
 function lib.get_tier_of_coin_name(coin_name)
@@ -2130,15 +1781,6 @@ function lib.get_str_from_coin(coin, show_leading_zeros, sigfigs)
         return tostring(value)
     end
 
-    -- deprecated
-    -- if show_leading_zeros then
-    --     local s = 0
-    --     for i, coin_name in pairs(storage.coin_tiers.COIN_NAMES) do
-            
-    --     end
-    --     return "[img=hex-coin]x" .. format(coin.values[1]) .. " [img=gravity-coin]x" .. format(coin.values[2]) .. " [img=meteor-coin]x" .. format(coin.values[3]) .. " [img=hexaprism-coin]x" .. format(coin.values[4])
-    -- end
-
     local text = ""
     local visible = false
 
@@ -2311,12 +1953,6 @@ function lib.get_player_opened_or_selected_entity(player)
     end
 end
 
--- ---Get the required tiles for placement of an entity prototype.
--- ---@param prot LuaEntityPrototype
--- function lib.entity_required_tiles(prot)
-
--- end
-
 ---Return whether the given player's cooldown under the category `cooldown_name` is ready for retriggering.
 ---@param player_index int
 ---@param cooldown_name string
@@ -2377,7 +2013,8 @@ function lib.get_cargo_wagons_nearest_to_stop(train, train_stop)
     if not front or not front.valid then return {} end
     if not train_stop.valid then return train.cargo_wagons end
 
-    if lib.square_distance(front.position, train_stop.position) < 13.2 then -- Comparing distance is the best way I can come up with for correctly distinguishing this.
+    -- TODO: Use rect.square_distance(), but first need to move this function outside of api/lib.lua to avoid circular dependencies
+    if (front.position.x - train_stop.position.x) * (front.position.x - train_stop.position.x) + (front.position.y - train_stop.position.y) * (front.position.y - train_stop.position.y) < 13.2 then -- Comparing distance is the best way I can come up with for correctly distinguishing this.
         return train.cargo_wagons
     end
 

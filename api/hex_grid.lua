@@ -1,7 +1,9 @@
 
 local lib = require "api.lib"
 local sets = require "api.sets"
-local axial = require "api.axial"
+local axial = require "api.util.axial"
+local rect = require "api.util.rect"
+local hex_util = require "api.util.hex"
 local hex_island = require "api.hex_island"
 local event_system = require "api.event_system"
 local terrain = require "api.terrain"
@@ -17,11 +19,11 @@ local item_ranks  = require "api.item_ranks"
 local dungeons = require "api.dungeons"
 local inventories = require "api.inventories"
 local strongboxes = require "api.strongboxes"
-local entity_util = require "api.entity_util"
 local piggy_bank  = require "api.piggy_bank"
 local gameplay_statistics = require "api.gameplay_statistics"
-local hex_util            = require "api.hex_util"
-local hex_sets            = require "api.hex_sets"
+local hex_sets = require "api.hex_sets"
+local mgs_util = require "api.util.mgs"
+local entity_util = require "api.util.entity"
 
 
 
@@ -181,6 +183,12 @@ function hex_grid.register_events()
 
     event_system.register("command-hextorio-debug", function(player, params)
         hex_grid.claim_hexes_range(player.surface.name, {q = 0, r = 0}, 1, nil, true) -- claim by server
+    end)
+
+    event_system.register("command-regenerate-loaders", function(player, params)
+        local state = hex_state_manager.get_hex_state_containing(player.surface, player.position)
+        if not state then lib.log_error("Couldn't find hex state to process command /regenerate-loaders") return end
+        hex_grid.generate_loaders(state)
     end)
 
     event_system.register("command-claim", function(player, params)
@@ -562,7 +570,7 @@ function hex_grid.apply_extra_trades_bonus(state)
         end
     end
 
-    local chunk_pos = lib.get_chunk_pos_from_tile_position(state.hex_core.position)
+    local chunk_pos = rect.get_chunk_pos_from_tile_position(state.hex_core.position)
     if next(added_trades) and game.forces.player.is_chunk_charted(state.hex_core.surface, chunk_pos) then
         for item_name, trade in pairs(added_trades) do
             lib.print_notification("extra-trade", {"",
@@ -571,7 +579,7 @@ function hex_grid.apply_extra_trades_bonus(state)
                     "yellow", "heading-1"
                 ),
                 " ",
-                lib.get_gps_str_from_hex_core(state.hex_core),
+                state.hex_core.gps_tag,
                 " ",
                 lib.get_trade_img_str(trade, trades.trade_has_untradable_items(trade))
             })
@@ -851,7 +859,7 @@ function hex_grid.initialize_hex(surface, hex_pos, hex_grid_scale, hex_grid_rota
             elseif math.random() < lib.runtime_setting_value "fulgoran-attractor-chance" then
                 local transformation = terrain.get_surface_transformation "fulgora"
                 local pos = axial.get_hex_center(hex_pos, transformation.scale, transformation.rotation)
-                pos = lib.vector_add(pos, lib.random_unit_vector(9))
+                pos = rect.vector_add(pos, rect.random_unit_vector(9))
                 surface.create_entity {
                     name = "fulgoran-ruin-attractor",
                     position = pos,
@@ -869,10 +877,10 @@ function hex_grid.initialize_hex(surface, hex_pos, hex_grid_scale, hex_grid_rota
 
         if not is_dungeon then
             if surface.name == "nauvis" then
-                local min_biter_distance = lib.remap_map_gen_setting(mgs.starting_area, 0, 3)
+                local min_biter_distance = mgs_util.remap_map_gen_setting(mgs.starting_area, 0, 3)
                 local is_biter_hex = not is_starting_hex and dist >= min_biter_distance
                 if is_biter_hex then
-                    local biter_chance = lib.remap_map_gen_setting(mgs.autoplace_controls["enemy-base"].frequency)
+                    local biter_chance = mgs_util.remap_map_gen_setting(mgs.autoplace_controls["enemy-base"].frequency)
 
                     local r = math.random()
                     local proc = r < biter_chance
@@ -894,10 +902,10 @@ function hex_grid.initialize_hex(surface, hex_pos, hex_grid_scale, hex_grid_rota
                     end
                 end
             elseif surface.name == "gleba" then
-                local min_pentapod_distance = lib.remap_map_gen_setting(mgs.starting_area, 0, 3)
+                local min_pentapod_distance = mgs_util.remap_map_gen_setting(mgs.starting_area, 0, 3)
                 local is_pentapod_hex = not is_starting_hex and dist >= min_pentapod_distance
                 if is_pentapod_hex then
-                    local pentapod_chance = math.sqrt(lib.remap_map_gen_setting(mgs.autoplace_controls.gleba_enemy_base.frequency))
+                    local pentapod_chance = math.sqrt(mgs_util.remap_map_gen_setting(mgs.autoplace_controls.gleba_enemy_base.frequency))
 
                     local r = math.random()
                     local proc = r < pentapod_chance
@@ -1011,7 +1019,7 @@ function hex_grid.generate_hex_resources(surface, hex_pos, hex_grid_scale, hex_g
         resource_names = {}
     end
 
-    local total_resource_size = lib.sum_mgs(mgs.autoplace_controls, "size", resource_names)
+    local total_resource_size = mgs_util.sum_mgs(mgs.autoplace_controls, "size", resource_names)
     local r = math.random()
     local resource_stroke_width
 
@@ -1050,13 +1058,15 @@ function hex_grid.generate_hex_resources(surface, hex_pos, hex_grid_scale, hex_g
         local num_entities_min
         local num_entities_max
         if surface.name == "nauvis" then
-            num_entities_min = math.floor(0.5 + lib.remap_map_gen_setting(mgs.autoplace_controls["crude-oil"].size, 1, 3))
-            num_entities_max = math.floor(0.5 + lib.remap_map_gen_setting(mgs.autoplace_controls["crude-oil"].size, 3, 6))
+            local autoplace_control = mgs_util.get_autoplace_control(mgs, "crude-oil")
+            num_entities_min = math.floor(0.5 + mgs_util.remap_map_gen_setting(tonumber(autoplace_control.size), 1, 3))
+            num_entities_max = math.floor(0.5 + mgs_util.remap_map_gen_setting(tonumber(autoplace_control.size), 3, 6))
         elseif surface.name == "vulcanus" then
-            num_entities_min = math.floor(0.5 + lib.remap_map_gen_setting(mgs.autoplace_controls.sulfuric_acid_geyser.size, 1, 3))
-            num_entities_max = math.floor(0.5 + lib.remap_map_gen_setting(mgs.autoplace_controls.sulfuric_acid_geyser.size, 3, 6))
+            local autoplace_control = mgs_util.get_autoplace_control(mgs, "sulfuric_acid_geyser")
+            num_entities_min = math.floor(0.5 + mgs_util.remap_map_gen_setting(tonumber(autoplace_control.size), 1, 3))
+            num_entities_max = math.floor(0.5 + mgs_util.remap_map_gen_setting(tonumber(autoplace_control.size), 3, 6))
         elseif surface.name == "aquilo" then
-            local size = lib.sum_mgs(mgs.autoplace_controls, "size", {"aquilo_crude_oil", "lithium_brine", "fluorine_vent"}) / 3
+            local size = mgs_util.sum_mgs(mgs.autoplace_controls, "size", {"aquilo_crude_oil", "lithium_brine", "fluorine_vent"}) / 3
 
             num_entities_min = math.floor(0.5 + 1 + 2 * size)
             num_entities_max = math.floor(0.5 + 3 + 3 * size)
@@ -1099,13 +1109,13 @@ function hex_grid.generate_hex_resources(surface, hex_pos, hex_grid_scale, hex_g
             rotation = math.random() * math.pi * 2
         end
 
-        local hex_center = lib.rounded_position(axial.get_hex_center(hex_pos, hex_grid_scale, hex_grid_rotation), false)
+        local hex_center = rect.rounded_position(axial.get_hex_center(hex_pos, hex_grid_scale, hex_grid_rotation), false)
 
         local ore_positions
         local offset_hex_center -- Used only by single-hex shapes.  Used to determine how unmixed ores should be generated.
         local ore_generation_mode = lib.runtime_setting_value "ore-generation-mode"
         if ore_generation_mode == "along-edges" then
-            ore_positions = axial.get_hex_border_tiles(hex_pos, hex_grid_scale, hex_grid_rotation, resource_stroke_width, stroke_width + 2)
+            ore_positions = hex_util.get_hex_border_tiles(hex_pos, hex_grid_scale, hex_grid_rotation, resource_stroke_width, stroke_width + 2)
         elseif ore_generation_mode == "single-hex" then
             local offset_scale = 5 + resource_stroke_width
             local offset_rotation = math.random() * math.pi
@@ -1120,7 +1130,7 @@ function hex_grid.generate_hex_resources(surface, hex_pos, hex_grid_scale, hex_g
                 local closest_dist = math.huge
                 for _, adj_pos in pairs(axial.get_adjacent_hexes(center_offset_hex)) do
                     local rect_pos = axial.get_hex_center(adj_pos, offset_scale, offset_rotation)
-                    local d = lib.square_distance(rect_pos, hex_center)
+                    local d = rect.square_distance(rect_pos, hex_center)
                     if d < closest_dist then
                         closest_dist = d
                         offset_hex_pos = adj_pos
@@ -1130,7 +1140,7 @@ function hex_grid.generate_hex_resources(surface, hex_pos, hex_grid_scale, hex_g
 
             offset_hex_center = axial.get_hex_center(offset_hex_pos, offset_scale, offset_rotation)
 
-            ore_positions = axial.get_hex_tile_positions(offset_hex_pos, offset_scale, offset_rotation, 0)
+            ore_positions = hex_util.get_hex_tile_positions(offset_hex_pos, offset_scale, offset_rotation, 0)
         elseif ore_generation_mode == "center-square" then
             ore_positions = {}
             local min_x = hex_center.x - 2 - resource_stroke_width
@@ -1144,7 +1154,7 @@ function hex_grid.generate_hex_resources(surface, hex_pos, hex_grid_scale, hex_g
             end
         elseif ore_generation_mode == "spokes" then
             local half_width = resource_stroke_width / 2
-            local inner_tiles = axial.get_hex_tile_positions(hex_pos, hex_grid_scale, hex_grid_rotation, stroke_width)
+            local inner_tiles = hex_util.get_hex_tile_positions(hex_pos, hex_grid_scale, hex_grid_rotation, stroke_width)
             local spoke_rotation = math.random() * math.pi / 3
             ore_positions = {}
             for _, tile in pairs(inner_tiles) do
@@ -1162,7 +1172,7 @@ function hex_grid.generate_hex_resources(surface, hex_pos, hex_grid_scale, hex_g
             end
         elseif ore_generation_mode == "scattered" then
             local inner_size = hex_grid_scale - stroke_width
-            local inner_tiles = axial.get_hex_tile_positions(hex_pos, hex_grid_scale, hex_grid_rotation, stroke_width)
+            local inner_tiles = hex_util.get_hex_tile_positions(hex_pos, hex_grid_scale, hex_grid_rotation, stroke_width)
             local density = inner_size > 0 and math.min(1, 2 * resource_stroke_width / inner_size) or 1
             ore_positions = {}
             for _, tile in pairs(inner_tiles) do
@@ -1348,8 +1358,8 @@ function hex_grid.get_randomized_resource_weighted_choice(surface, hex_pos)
             table.insert(resource_names, "uranium-ore")
         end
 
-        local well_freq = lib.sum_mgs(mgs.autoplace_controls, "frequency", well_names)
-        local total_resource_freq = lib.sum_mgs(mgs.autoplace_controls, "frequency", resource_names)
+        local well_freq = mgs_util.sum_mgs(mgs.autoplace_controls, "frequency", well_names)
+        local total_resource_freq = mgs_util.sum_mgs(mgs.autoplace_controls, "frequency", resource_names)
         local resource_freq = total_resource_freq
         resource_freq = resource_freq / #resource_names
         resource_freq = (resource_freq ^ 2.6) * #resource_names
@@ -1369,7 +1379,7 @@ function hex_grid.get_randomized_resource_weighted_choice(surface, hex_pos)
             return storage.hex_grid.resource_weighted_choice.nauvis.wells, true
         end
 
-        local is_uranium = can_be_uranium and math.random() < lib.remap_map_gen_setting(mgs.autoplace_controls["uranium-ore"].frequency) / total_resource_freq
+        local is_uranium = can_be_uranium and math.random() < mgs_util.remap_map_gen_setting(mgs.autoplace_controls["uranium-ore"].frequency) / total_resource_freq
         if is_uranium then
             return storage.hex_grid.resource_weighted_choice.nauvis.uranium, false
         end
@@ -1391,8 +1401,8 @@ function hex_grid.get_randomized_resource_weighted_choice(surface, hex_pos)
         end
         local can_be_tungsten = dist >= lib.runtime_setting_value "min-tungsten-dist"
 
-        local well_freq = lib.sum_mgs(mgs.autoplace_controls, "frequency", {"sulfuric_acid_geyser"})
-        local resource_freq = lib.sum_mgs(mgs.autoplace_controls, "frequency", {"vulcanus_coal", "calcite", "tungsten_ore"})
+        local well_freq = mgs_util.sum_mgs(mgs.autoplace_controls, "frequency", {"sulfuric_acid_geyser"})
+        local resource_freq = mgs_util.sum_mgs(mgs.autoplace_controls, "frequency", {"vulcanus_coal", "calcite", "tungsten_ore"})
         resource_freq = resource_freq * resource_freq / 3
         resource_freq = resource_freq / (1 + dist * dropoff)
         well_freq = well_freq / (1 + dist * dropoff)
@@ -1439,7 +1449,7 @@ function hex_grid.get_randomized_resource_weighted_choice(surface, hex_pos)
             return storage.hex_grid.resource_weighted_choice.fulgora.resources, false
         end
 
-        local resource_freq = lib.sum_mgs(mgs.autoplace_controls, "frequency", {"scrap"})
+        local resource_freq = mgs_util.sum_mgs(mgs.autoplace_controls, "frequency", {"scrap"})
         resource_freq = resource_freq * resource_freq
         resource_freq = resource_freq / (1 + dist * dropoff)
         if math.random() > resource_freq then
@@ -1448,7 +1458,7 @@ function hex_grid.get_randomized_resource_weighted_choice(surface, hex_pos)
 
         return weighted_choice.copy(storage.hex_grid.resource_weighted_choice.fulgora.resources), false
     elseif surface.name == "gleba" then
-        local resource_freq = lib.remap_map_gen_setting(mgs.autoplace_controls.gleba_stone.frequency)
+        local resource_freq = mgs_util.remap_map_gen_setting(mgs.autoplace_controls.gleba_stone.frequency)
         resource_freq = resource_freq * resource_freq
         resource_freq = resource_freq / (1 + dist * dropoff)
         if not is_starter_hex and math.random() > resource_freq then
@@ -1458,7 +1468,7 @@ function hex_grid.get_randomized_resource_weighted_choice(surface, hex_pos)
         return weighted_choice.copy(storage.hex_grid.resource_weighted_choice.gleba.resources), false
     elseif surface.name == "aquilo" then
         local well_names = {"aquilo_crude_oil", "lithium_brine", "fluorine_vent"}
-        local well_freq = lib.sum_mgs(mgs.autoplace_controls, "frequency", well_names)
+        local well_freq = mgs_util.sum_mgs(mgs.autoplace_controls, "frequency", well_names)
         well_freq = well_freq * well_freq / 3
         well_freq = well_freq / (1 + dist * dropoff)
         if math.random() > well_freq then
@@ -1493,8 +1503,8 @@ function hex_grid.generate_hex_biters(surface, hex_pos, hex_grid_scale, hex_grid
     local dist = axial.distance(hex_pos, {q=0, r=0})
     local quality = hex_grid.get_quality_from_distance(surface.name, dist)
 
-    local num_spawners_min = math.floor(0.5 + lib.remap_map_gen_setting(tonumber(storage.hex_grid.mgs["nauvis"].autoplace_controls["enemy-base"].size), 1, 3))
-    local num_spawners_max = math.floor(0.5 + lib.remap_map_gen_setting(tonumber(storage.hex_grid.mgs["nauvis"].autoplace_controls["enemy-base"].size), 1, 5))
+    local num_spawners_min = math.floor(0.5 + mgs_util.remap_map_gen_setting(tonumber(storage.hex_grid.mgs["nauvis"].autoplace_controls["enemy-base"].size), 1, 3))
+    local num_spawners_max = math.floor(0.5 + mgs_util.remap_map_gen_setting(tonumber(storage.hex_grid.mgs["nauvis"].autoplace_controls["enemy-base"].size), 1, 5))
     local num_spawners = math.random(num_spawners_min, num_spawners_max)
     local num_worms = math.floor(0.4999 + num_spawners * (0.5 + math.random()))
     local center = axial.get_hex_center(hex_pos, hex_grid_scale, hex_grid_rotation)
@@ -1513,8 +1523,8 @@ function hex_grid.generate_hex_pentapods(surface, hex_pos, hex_grid_scale, hex_g
     local dist = axial.distance(hex_pos, {q=0, r=0})
     local quality = hex_grid.get_quality_from_distance(surface.name, dist)
 
-    local num_rafts_min = math.floor(0.5 + lib.remap_map_gen_setting(storage.hex_grid.mgs["gleba"].autoplace_controls.gleba_enemy_base.size, 1, 3))
-    local num_rafts_max = math.floor(0.5 + lib.remap_map_gen_setting(storage.hex_grid.mgs["gleba"].autoplace_controls.gleba_enemy_base.size, 1, 5))
+    local num_rafts_min = math.floor(0.5 + mgs_util.remap_map_gen_setting(storage.hex_grid.mgs["gleba"].autoplace_controls.gleba_enemy_base.size, 1, 3))
+    local num_rafts_max = math.floor(0.5 + mgs_util.remap_map_gen_setting(storage.hex_grid.mgs["gleba"].autoplace_controls.gleba_enemy_base.size, 1, 5))
     local num_rafts = math.random(num_rafts_min, num_rafts_max)
     local center = axial.get_hex_center(hex_pos, hex_grid_scale, hex_grid_rotation)
 
@@ -1612,7 +1622,7 @@ function hex_grid.try_generate_strongbox(state)
 
     local surface = state.hex_core.surface
     local pos = state.hex_core.position
-    local offset = lib.random_unit_vector(math.random(8, 16))
+    local offset = rect.random_unit_vector(math.random(8, 16))
     pos = {x = pos.x + offset.x, y = pos.y + offset.y}
 
     local clear_pos = surface.find_non_colliding_position("strongbox-tier-1", pos, 10, 1, true)
@@ -2152,11 +2162,12 @@ function hex_grid.can_initialize_hex(surface, hex_pos, hex_grid_scale, hex_grid_
     if not surface_obj then return false end
 
     -- Only return true if all overlapping chunks are generated
-    for _, chunk_pos in pairs(axial.get_overlapping_chunks(hex_pos, hex_grid_scale, hex_grid_rotation)) do
+    for _, chunk_pos in pairs(hex_util.get_overlapping_chunks(hex_pos, hex_grid_scale, hex_grid_rotation)) do
         if not surface_obj.is_chunk_generated(chunk_pos) then
             return false
         end
     end
+
     return true
 end
 
@@ -2186,7 +2197,7 @@ function hex_grid.spawn_hex_core(surface, position)
         return
     end
 
-    local rounded_position = lib.rounded_position(position, true)
+    local rounded_position = rect.rounded_position(position, true)
 
     local hex_pos = axial.get_hex_containing(position, transformation.scale, transformation.rotation)
     local state = hex_state_manager.get_hex_state(surface_id, hex_pos)
@@ -2228,8 +2239,9 @@ function hex_grid.spawn_hex_core(surface, position)
     state.hex_core_input_inventory = hex_core.get_inventory(defines.inventory.chest)
     -- state.hex_core_output_inventory = output_chest.get_inventory(defines.inventory.chest)
     state.hex_core_output_inventory = state.hex_core_input_inventory
+    state.loader_fix_tick = game.tick + 30 -- just give it some time to resolve hex core entity data which is not immediatley resolved by this point in the code in this tick (apparently... this is a Factorio bug of some kind, not from Hextorio)
 
-    hex_grid.generate_loaders(state)
+    hex_grid.generate_loaders(state) -- first set of loaders, which will be regenerated 30 ticks later because there's a very small chance that one will be broken for some reason since they're created in the same tick as the hex core entity (the Factorio bug)
     hex_grid.spawn_hexlight(state)
 
     state.trades = {}
@@ -2663,11 +2675,29 @@ function hex_grid.upgrade_quality(hex_core)
     hex_grid.set_quality(hex_core, next_quality)
 end
 
+---Return whether the hex core's loaders were somehow generated incorrectly the first time.
+---@param state HexState
+---@return boolean
+function hex_grid.are_loaders_bugged(state)
+    if not state.input_loaders or not state.output_loaders then return true end
+
+    for _, e in pairs(state.input_loaders) do
+        if not e.loader_container or not e.loader_container.valid then
+            return true
+        end
+    end
+
+    for _, e in pairs(state.output_loaders) do
+        if not e.loader_container or not e.loader_container.valid then
+            return true
+        end
+    end
+
+    return false
+end
+
 function hex_grid.generate_loaders(hex_core_state)
     if not hex_core_state.hex_core then return end
-
-    hex_core_state.input_loaders = {}
-    hex_core_state.output_loaders = {}
 
     local surface = hex_core_state.hex_core.surface
     local position = hex_core_state.hex_core.position
@@ -2686,36 +2716,34 @@ function hex_grid.generate_loaders(hex_core_state)
 
     local entities = surface.find_entities_filtered {
         name = "hex-core-loader",
-        area = {{position.x - 2, position.y - 2}, {position.x + 2, position.y + 2}},
+        area = {{position.x - 2.5, position.y - 2.5}, {position.x + 2.5, position.y + 2.5}},
     }
     for _, e in pairs(entities) do
         if e.valid then
             if e.loader_filter_mode == "whitelist" then
-                filters[lib.position_to_string(e.position)] = get_filters(e)
+                filters[rect.position_to_string(e.position)] = get_filters(e)
             end
             e.destroy()
         end
     end
 
+    hex_core_state.input_loaders = {}
+    hex_core_state.output_loaders = {}
+
     local dx = 1
     local dy = -2
     for i = 1, 4 do
-        local dir_name = lib.get_direction_name((i + 3 - (i % 2) * 2) % 4 + 1) -- I have no idea why this works, but it does, so don't touch it.
-        local dir_name_opposite = lib.get_direction_name((i + 3) % 4 + 1)
-
-        local input_loader = surface.create_entity {name = "hex-core-loader", position = {position.x + dx, position.y + dy}, direction = defines.direction[dir_name], type = "input", force = "player"}
+        local input_loader = surface.create_entity {name = "hex-core-loader", position = {position.x + dx, position.y + dy}, direction = 4 * ((3 - i) % 4), type = "input", force = "player"}
         input_loader.destructible = false
-        -- input_loader.rotatable = false
-        table.insert(hex_core_state.input_loaders, input_loader)
+        hex_core_state.input_loaders[i] = input_loader
 
-        local output_loader = surface.create_entity {name = "hex-core-loader", position = {position.x - dx, position.y + dy}, direction = defines.direction[dir_name_opposite], type = "output", force = "player"}
+        local output_loader = surface.create_entity {name = "hex-core-loader", position = {position.x - dx, position.y + dy}, direction = 4 * ((3 + i) % 4), type = "output", force = "player"}
         output_loader.loader_filter_mode = "whitelist"
         output_loader.destructible = false
-        -- output_loader.rotatable = false
-        if filters[lib.position_to_string(output_loader.position)] then
-            set_filters(output_loader, filters[lib.position_to_string(output_loader.position)])
+        if filters[rect.position_to_string(output_loader.position)] then
+            set_filters(output_loader, filters[rect.position_to_string(output_loader.position)])
         end
-        table.insert(hex_core_state.output_loaders, output_loader)
+        hex_core_state.output_loaders[i] = output_loader
 
         dx, dy = dy, -dx
     end
@@ -2914,7 +2942,7 @@ function hex_grid.get_hex_resource_entities(hex_core)
     -- local state = hex_grid.get_hex_state_from_core(hex_core)
     -- if not state then return entities end
 
-    -- local inner_border_tiles = axial.get_hex_border_tiles(state.position, transformation.scale, transformation.rotation, transformation.scale - transformation.stroke_width, transformation.stroke_width, false)
+    -- local inner_border_tiles = hex_util.get_hex_border_tiles(state.position, transformation.scale, transformation.rotation, transformation.scale - transformation.stroke_width, transformation.stroke_width, false)
     -- for i = #entities, 1, -1 do
     --     local entity = entities[i]
     --     if not inner_border_tiles[entity.position.x] or not inner_border_tiles[entity.position.x][entity.position.y] then
@@ -3146,6 +3174,7 @@ function hex_grid.process_hex_core_pool()
     for _, pool_params in pairs(pool) do
         local state = hex_grid.get_hex_state_from_pool_params(pool_params)
         if state then
+            hex_grid.try_fix_loaders(state)
             hex_grid.process_hex_core_trades(state, state.hex_core_input_inventory, state.hex_core_output_inventory, quality_cost_multipliers, nil)
             hex_grid.process_strongboxes(state)
             hex_grid.process_hexlight(state)
@@ -3805,6 +3834,20 @@ function hex_grid.process_hexlight(state)
     end
 end
 
+---Attempt to regenerate the loader entities in the given hex state.
+---This only executes once and fixes a very rare bug where loaders sometimes do not get set up correctly, despite all of the code being correct (the API is bugged).
+---@param state HexState
+function hex_grid.try_fix_loaders(state)
+    if not state.loader_fix_tick then return end
+    if game.tick < state.loader_fix_tick then return end
+
+    if hex_grid.are_loaders_bugged(state) then
+        hex_grid.generate_loaders(state)
+    end
+
+    state.loader_fix_tick = nil
+end
+
 function hex_grid.add_to_output_buffer(state, items)
     if not state.output_buffer then
         state.output_buffer = {}
@@ -4011,7 +4054,7 @@ function hex_grid.apply_extra_trades_bonus_retro(item_name)
             if i > 1 then
                 hex_cores_str = hex_cores_str .. "   "
             end
-            hex_cores_str = hex_cores_str .. lib.get_gps_str_from_hex_core(state.hex_core)
+            hex_cores_str = hex_cores_str .. state.hex_core.gps_tag
             i = i + 1
         end
     end
@@ -4057,7 +4100,7 @@ function hex_grid.apply_interplanetary_trade_bonus(state, item_name)
                 "cyan", "heading-1"
             ),
             " ",
-            lib.get_gps_str_from_hex_core(state.hex_core),
+            state.hex_core.gps_tag,
             " ",
             lib.get_trade_img_str(trade),
         })
@@ -4117,7 +4160,7 @@ function hex_grid.try_recover_trade(trade, states, notify)
                     "heading-1"
                 ),
                 " ",
-                lib.get_gps_str_from_hex_core(state.hex_core),
+                state.hex_core.gps_tag,
                 " ",
                 lib.get_trade_img_str(trade),
             })
@@ -4521,10 +4564,10 @@ function hex_grid.on_chunk_generated(surface, chunk_pos)
     local stroke_width = transformation.stroke_width
 
     -- Convert chunk position to rectangle coordinates
-    local top_left, bottom_right = lib.chunk_to_rect(chunk_pos)
+    local top_left, bottom_right = rect.chunk_to_rect(chunk_pos)
 
     -- Find all hexes that overlap with this chunk
-    local overlapping_hexes = axial.get_overlapping_hexes(
+    local overlapping_hexes = hex_util.get_overlapping_hexes(
         top_left, bottom_right, hex_grid_scale, hex_grid_rotation
     )
 

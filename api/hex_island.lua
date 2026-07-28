@@ -1,10 +1,11 @@
 -- Generate hex sets which represent a single, connected island.
 
 local lib = require "api.lib"
-local axial = require "api.axial"
+local axial = require "api.util.axial"
 local hex_sets = require "api.hex_sets"
 local event_system = require "api.event_system"
-local hex_util     = require "api.hex_util"
+local hex_util = require "api.util.hex"
+local mgs_util = require "api.util.mgs"
 
 local hex_island = {}
 
@@ -62,6 +63,8 @@ local function calculate_extent(distances)
     return max_distance
 end
 
+
+
 function hex_island.register_events()
     event_system.register("surface-created", hex_island.process_surface_creation)
 end
@@ -116,7 +119,7 @@ function hex_island.process_surface_creation(surface)
         if control_key then
             local control = mgs.autoplace_controls[control_key]
             if control and control.size > 0 then
-                land_chance = (lib.remap_map_gen_setting(1 / control.frequency) + lib.remap_map_gen_setting(control.size)) * 0.5
+                land_chance = (mgs_util.remap_map_gen_setting(1 / control.frequency) + mgs_util.remap_map_gen_setting(control.size)) * 0.5
             end
         elseif surface.name == "aquilo" then
             land_chance = 0.60
@@ -144,7 +147,6 @@ function hex_island.process_surface_creation(surface)
             end
         end
     end
-
 
     lib.log("hex_island.process_surface_creation: Generating island with generator = " .. generator_name .. ", params = " .. serpent.line(params))
     local island = hex_island.generate_island(generator_name, params)

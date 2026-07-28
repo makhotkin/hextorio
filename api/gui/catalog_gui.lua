@@ -1,3 +1,4 @@
+
 local lib = require "api.lib"
 local gui = require "api.gui.core_gui"
 local item_values = require "api.item_values"
@@ -125,6 +126,7 @@ function catalog_gui.reinitialize(player)
     catalog_gui.init_catalog(player)
 end
 
+---@param player LuaPlayer
 function catalog_gui.init_catalog(player)
     local frame = player.gui.screen.add {
         type = "frame",
@@ -152,24 +154,27 @@ function catalog_gui.init_catalog(player)
     inspect_frame.style.width = 308
 
     local is_first_surface = true
-    for _, surface in pairs(game.planets) do
-        local surface_name = surface.name
+    for _, planet in pairs(game.planets) do
+        local surface_name = planet.name
         local items_sorted_by_value = item_values.get_items_sorted_by_value(surface_name, true, true, false, true)
 
         if storage.SUPPORTED_PLANETS[surface_name] then
-            if not is_first_surface then
-                scroll_pane.add {type = "line", direction = "horizontal"}
-            else
+            if is_first_surface then
                 is_first_surface = false
+            else
+                scroll_pane.add {type = "line", direction = "horizontal"}
             end
 
-            catalog_gui.create_surface_header(scroll_pane, surface_name, #items_sorted_by_value)
-            catalog_gui.list_catalog_table(player, scroll_pane, surface_name, items_sorted_by_value)
+            catalog_gui.build_surface_header(scroll_pane, surface_name, #items_sorted_by_value)
+            catalog_gui.build_surface_table(player, scroll_pane, surface_name, items_sorted_by_value)
         end
     end
 end
 
-function catalog_gui.create_surface_header(scroll_pane, surface_name, total_items)
+---@param scroll_pane LuaGuiElement
+---@param surface_name string
+---@param total_items int
+function catalog_gui.build_surface_header(scroll_pane, surface_name, total_items)
     local surface_header = scroll_pane.add {type = "label", name = "surface-header-" .. surface_name, caption = {"", "[img=space-location." .. surface_name .. "] ", {"space-location-name." .. surface_name}}}
     surface_header.style.font = "heading-1"
 
@@ -190,7 +195,11 @@ function catalog_gui.create_surface_header(scroll_pane, surface_name, total_item
     end
 end
 
-function catalog_gui.list_catalog_table(player, scroll_pane, surface_name, items_sorted_by_value)
+---@param player LuaPlayer
+---@param scroll_pane LuaGuiElement
+---@param surface_name string
+---@param items_sorted_by_value string[]
+function catalog_gui.build_surface_table(player, scroll_pane, surface_name, items_sorted_by_value)
     local catalog_table = scroll_pane.add {type = "table", name = "table-" .. surface_name, column_count = 13, tags = {surface_name = surface_name}}
     gui.auto_width(catalog_table)
 
@@ -239,6 +248,7 @@ function catalog_gui.list_catalog_table(player, scroll_pane, surface_name, items
     end
 end
 
+---@param player LuaPlayer
 function catalog_gui.update_catalog(player)
     local frame = player.gui.screen["catalog"]
     if not frame then
@@ -295,6 +305,7 @@ function catalog_gui.update_catalog(player)
     catalog_gui.set_catalog_selection(player, selection.surface_name, selection.item_name, selection.bazaar_quality)
 end
 
+---@param player LuaPlayer
 function catalog_gui.update_catalog_inspect_frame(player)
     local frame = player.gui.screen["catalog"]
     if not frame or not frame.valid then
@@ -320,6 +331,9 @@ function catalog_gui.update_catalog_inspect_frame(player)
     catalog_gui.build_quantum_bazaar(player, rank_obj, inspect_frame)
 end
 
+---@param player LuaPlayer
+---@param rank_obj table
+---@param frame LuaGuiElement
 function catalog_gui.build_header(player, rank_obj, frame)
     local selection = catalog_gui.get_catalog_selection(player)
 
@@ -426,6 +440,9 @@ function catalog_gui.build_header(player, rank_obj, frame)
     frame.add {type = "line", direction = "horizontal"}
 end
 
+---@param player LuaPlayer
+---@param rank_obj table
+---@param frame LuaGuiElement
 function catalog_gui.build_item_buffs(player, rank_obj, frame)
     local selection = catalog_gui.get_catalog_selection(player)
     local buffs = item_buffs.get_buffs(selection.item_name)
@@ -583,6 +600,9 @@ function catalog_gui.build_item_buffs(player, rank_obj, frame)
     end
 end
 
+---@param player LuaPlayer
+---@param rank_obj table
+---@param frame LuaGuiElement
 function catalog_gui.build_rank_bonuses(player, rank_obj, frame)
     local selection = catalog_gui.get_catalog_selection(player)
 
@@ -721,6 +741,9 @@ function catalog_gui.build_rank_bonuses(player, rank_obj, frame)
     end
 end
 
+---@param player LuaPlayer
+---@param rank_obj table
+---@param frame LuaGuiElement
 function catalog_gui.build_quantum_bazaar(player, rank_obj, frame)
     if rank_obj.rank < 5 then return end
 
@@ -865,6 +888,7 @@ function catalog_gui.build_quantum_bazaar(player, rank_obj, frame)
     catalog_gui.update_quantum_bazaar(player)
 end
 
+---@param player LuaPlayer
 function catalog_gui.show_catalog(player)
     local frame = player.gui.screen["catalog"]
     if not frame then
@@ -876,6 +900,7 @@ function catalog_gui.show_catalog(player)
     frame.force_auto_center()
 end
 
+---@param player LuaPlayer
 function catalog_gui.hide_catalog(player)
     local frame = player.gui.screen["catalog"]
     if not frame or not frame.valid then return end
@@ -1356,5 +1381,7 @@ function catalog_gui.on_search_text_changed(player, elem)
         end
     end
 end
+
+
 
 return catalog_gui
