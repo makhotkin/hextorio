@@ -23,7 +23,7 @@ return function()
         quests.index_by_condition_types(quest)
     end
 
-    for _, surface_name in pairs {"nauvis", "vulcanus", "fulgora", "gleba", "aquilo"} do
+    for surface_name, _ in pairs(storage.SUPPORTED_PLANETS) do
         if game.get_surface(surface_name) then
             trades.generate_interplanetary_trade_locations(surface_name)
         end

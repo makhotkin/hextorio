@@ -94,13 +94,7 @@ script.on_init(function()
     storage.cached = {} -- For reusing results from expensive function calls like geometric calculations between axial and rectangular coordinate systems.
     storage.cooldowns = {} -- Player-specific cooldowns for various operations like performance-impacting commands (such as /simple-trade-loops)
 
-    storage.SUPPORTED_PLANETS = {
-        nauvis = true,
-        vulcanus = true,
-        fulgora = true,
-        gleba = true,
-        aquilo = true,
-    }
+    storage.SUPPORTED_PLANETS = data_constants.SUPPORTED_PLANETS
 
     storage.initialization = {}
     storage.intro_gui = data_intro_gui

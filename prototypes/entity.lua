@@ -1,4 +1,5 @@
 local lib = require "api.lib"
+local constants = require "data.constants"
 
 local hex_core = { -- Direct copy of original game data.  Switched from table.deepcopy to avoid crashes with some mods that alter that significantly alter this data. (such as AAI containers)
   circuit_connector = {
@@ -431,7 +432,7 @@ end
 data:extend(sentient_spider_legs)
 
 
-for _, surface_name in pairs {"nauvis", "vulcanus", "fulgora", "gleba", "aquilo"} do
+for surface_name, _ in pairs(constants.SUPPORTED_PLANETS) do
     local hex_size = lib.startup_setting_value("hex-size-" .. surface_name)
     ---@cast hex_size number
 
