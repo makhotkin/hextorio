@@ -104,7 +104,7 @@ function catalog_gui.register_events()
         catalog_gui.show_catalog(player)
     end)
 
-    event_system.register("post-item-values-recalculated", catalog_gui.reinitialize)
+    event_system.register("item-tradability-recalculated", catalog_gui.reinitialize)
 end
 
 ---Reinitialize the catalog GUI for the given player, or all players if no player is provided.
@@ -1358,7 +1358,7 @@ function catalog_gui.on_search_text_changed(player, elem)
                 sets.add(items_to_show, item_name)
             end
         else
-            lib.log_error("Missing translation for " .. item_name)
+            lib.log_error("catalog_gui.on_search_text_changed: Missing translation for " .. item_name)
         end
     end
 

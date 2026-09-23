@@ -1,6 +1,56 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.9.10
+Date: 22/9/26
+  Bugfixes:
+    - Fixed that the starter [entity=fulgoran-ruin-vault] on Fulgora was sometimes skipped due to trying to generate on the spawn hex.
+  Changes:
+    - Shortened the mod description.
+---------------------------------------------------------------------------------------------------
+Version: 1.9.9
+Date: 22/9/26
+  Changes:
+    - Updated to Factorio 2.1.20.
+    - Piggy bank withdrawals are now capped to one stack of the clicked coin.
+    - A [entity=fulgoran-ruin-vault] is now created near spawn on Fulgora to prevent making people search endlessly for their first one.
+  Bugfixes:
+    - Fixed broken hex shapes caused by Fulgora's new vanilla terrain generation.
+---------------------------------------------------------------------------------------------------
+Version: 1.9.8
+Date: 21/9/26
+  Changes:
+    - Forced all recycling recipes to be enabled from the start so that the recycler quest reward is useful pre-Fulgora.
+  Bugfixes:
+    - Fixed that the catalog search stopped working after migrating a save to new mod versions.
+---------------------------------------------------------------------------------------------------
+Version: 1.9.7
+Date: 15/9/26
+  Bugfixes:
+    - Fixed occasional crash from invalid trade generation.
+---------------------------------------------------------------------------------------------------
+Version: 1.9.6
+Date: 14/9/26
+  Minor Features:
+    - Added the /snap-to-hex-grid command, which configures the blueprint you're holding for perfect hex-to-hex tilability on the surface you're viewing.
+  Changes:
+    - Hexes now have the same shape everywhere, allowing perfect blueprint tilability, e.g. mining drill layouts, railways, concrete floor designs, etc.
+        Does not apply to older saves. Credit to flamebeard10339 for making this work.
+  Graphics:
+    - Reworked coin sprites.
+  Sounds:
+    - Added custom SFX to the [item=electromagnetic-penetrator].
+  Bugfixes:
+    - Changed hexes in unlooted dungeons to stop showing a claim button, for the cost is irrelevant and they are auto-claimed for free on dungeon clear.
+    - Fixed that the "extra trade" bonus from bronze items sometimes didn't include the bronze-ranked item that created it.
+  Scripting:
+    - Added the hex_lattice utility module, which solves the problem of blueprint non-tilability.
+---------------------------------------------------------------------------------------------------
 Version: 1.9.5
-Date: 19/7/26
+Date: 16/8/26
+  Features:
+    - Added the "Mod Blacklist" mod setting for blacklisting items in trade generation by mod name, defaulting to some popular decoration mods.
+  Bugfixes:
+    - Fixed rare crash when hex cores contain no trades.
+    - Fixed that the catalog GUI did not update with item tradability updates that are separate from item value updates.
 ---------------------------------------------------------------------------------------------------
 Version: 1.9.4
 Date: 19/7/26

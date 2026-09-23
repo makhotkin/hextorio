@@ -113,9 +113,8 @@ function hex_core_gui.init_hex_core(player)
 
     local resources_flow = frame.add {type = "flow", name = "resources-flow", direction = "horizontal"}
 
-    frame.add {type = "line", direction = "horizontal"}
-
     local claim_flow = frame.add {type = "flow", name = "claim-flow", direction = "vertical"}
+    claim_flow.add {type = "line", direction = "horizontal"}
     local free_hexes_remaining = claim_flow.add {type = "label", name = "free-hexes-remaining"}
     local claim_price = coin_tier_gui.create_coin_tier(claim_flow, "claim-price")
     local claim_hex = claim_flow.add {
@@ -291,7 +290,7 @@ function hex_core_gui.update_hex_core(player)
     end
 
     local hex_core = lib.get_player_opened_entity(player)
-    if not hex_core then return end
+    if not hex_core or not hex_core.valid then return end
 
     local state = hex_grid.get_hex_state_from_core(hex_core)
     if not state then return end
@@ -411,20 +410,24 @@ function hex_core_gui.update_hex_core(player)
             frame["hex-control-flow"]["upgrade-quality"].visible = false
         end
     else
-        frame["claim-flow"].visible = true
+        frame["hex-control-flow"].visible = false
         frame["claimed-by"].visible = false
 
-        frame["hex-control-flow"].visible = false
-
-        if hex_grid.get_free_hex_claims(hex_core.surface.name) > 0 then
-            frame["claim-flow"]["free-hexes-remaining"].visible = true
-            frame["claim-flow"]["free-hexes-remaining"].caption = {"", lib.color_localized_string({"hextorio-gui.quest-reward"}, "white", "heading-2"), " ", {"hextorio-gui.quest-reward-free-hexes-remaining", hex_grid.get_free_hex_claims(hex_core.surface.name), "green", "heading-2"}}
-            coin_tier_gui.update_coin_tier(frame["claim-flow"]["claim-price"], coin_tiers.new())
+        if state.is_dungeon then
+            frame["claim-flow"].visible = false
         else
-            frame["claim-flow"]["free-hexes-remaining"].visible = false
-            local coin = state.claim_price
-            if coin then
-                coin_tier_gui.update_coin_tier(frame["claim-flow"]["claim-price"], coin)
+            frame["claim-flow"].visible = true
+
+            if hex_grid.get_free_hex_claims(hex_core.surface.name) > 0 then
+                frame["claim-flow"]["free-hexes-remaining"].visible = true
+                frame["claim-flow"]["free-hexes-remaining"].caption = {"", lib.color_localized_string({"hextorio-gui.quest-reward"}, "white", "heading-2"), " ", {"hextorio-gui.quest-reward-free-hexes-remaining", hex_grid.get_free_hex_claims(hex_core.surface.name), "green", "heading-2"}}
+                coin_tier_gui.update_coin_tier(frame["claim-flow"]["claim-price"], coin_tiers.new())
+            else
+                frame["claim-flow"]["free-hexes-remaining"].visible = false
+                local coin = state.claim_price
+                if coin then
+                    coin_tier_gui.update_coin_tier(frame["claim-flow"]["claim-price"], coin)
+                end
             end
         end
     end
@@ -464,12 +467,16 @@ function hex_core_gui.update_hex_core(player)
         return
     end
 
+    if not state.trades or not next(state.trades) then
+        lib.log("No trades found in hex core at " .. hex_core.gps_tag)
+    end
+
     local show_quality_bounds = false
     if state.claimed then
         show_quality_bounds = lib.get_highest_unlocked_quality().name ~= "normal"
     end
 
-    trades_gui.build_trades_scroll_pane(player, frame.trades, trades.convert_trade_id_array_to_trade_array(state.trades), {
+    trades_gui.build_trades_scroll_pane(player, frame.trades, trades.convert_trade_id_array_to_trade_array(state.trades or {}), {
         show_toggle_trade = state.claimed,
         show_tag_creator = true,
         show_ping_button = true,

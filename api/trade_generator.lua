@@ -188,7 +188,7 @@ function trade_generator.generate_random(surface_name, existing_trades, volume, 
                     i = i % #input_item_names + 1
                 end
                 if input_item_names[i] ~= include_item then
-                    input_item_names[math.random(1, #input_item_names)] = coin_type
+                    input_item_names[i] = coin_type
                 end
             end
         end
@@ -344,6 +344,25 @@ function trade_generator.generate_item_names(surface_name, volume, params, allow
         else
             output_item_names[i - num_inputs] = trade_items[i]
         end
+    end
+
+    -- TODO: MAKE SURE THAT output_item_names DOES NOT HAVE STAGGERED INDICES (e.g. where output_item_names[1] == nil but output_item_names[2] ~= nil)
+    if not input_item_names[1] and next(input_item_names) then
+        lib.log_error("trade_generator.generate_item_names: Input item names has unintentionally missing entries: " .. serpent.line(input_item_names))
+        local fixed = {}
+        for _, item_name in pairs(input_item_names) do
+            fixed[#fixed+1] = item_name
+        end
+        input_item_names = fixed
+    end
+
+    if not output_item_names[1] and next(output_item_names) then
+        lib.log_error("trade_generator.generate_item_names: Output item names has unintentionally missing entries: " .. serpent.line(output_item_names))
+        local fixed = {}
+        for _, item_name in pairs(output_item_names) do
+            fixed[#fixed+1] = item_name
+        end
+        output_item_names = fixed
     end
 
     return input_item_names, output_item_names

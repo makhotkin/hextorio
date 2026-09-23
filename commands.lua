@@ -29,6 +29,10 @@ local all_commands = {
         examples = {"/force-claim", "/force-claim 1"},
     },
     {
+        name = "snap-to-hex-grid",
+        usage = "/snap-to-hex-grid",
+    },
+    {
         name = "rank-up",
         usage = "/rank-up <item-name>",
         params = {"string"},
@@ -142,6 +146,7 @@ local all_commands = {
 local public_commands = sets.new {
     "hextorio-commands",
     "get-item-value",
+    "snap-to-hex-grid",
 }
 
 

@@ -4,6 +4,8 @@ local sets = require "api.sets"
 local axial = require "api.util.axial"
 local rect = require "api.util.rect"
 local hex_util = require "api.util.hex"
+local hex_lattice = require "api.util.hex_lattice"
+local blueprints = require "api.blueprints"
 local hex_island = require "api.hex_island"
 local event_system = require "api.event_system"
 local terrain = require "api.terrain"
@@ -225,6 +227,35 @@ function hex_grid.register_events()
         hex_grid.claim_hexes_range(player.surface.name, hex_pos, params[1] or 0, nil, true) -- claim by server
     end)
 
+    event_system.register("command-snap-to-hex-grid", function(player, params)
+        local transformation = terrain.get_surface_transformation(player.surface)
+        if not transformation then return end
+
+        local snapping = hex_lattice.get_blueprint_snapping(transformation.scale, transformation.rotation)
+        if not snapping then
+            player.print {"hextorio.snap-to-hex-grid-rotated"}
+            return
+        end
+
+        local blueprint ---@type LuaItemStack|LuaRecord|nil
+        local stack = player.cursor_stack
+        if stack and stack.valid_for_read and stack.is_blueprint then
+            blueprint = stack
+        else
+            -- Blueprints held from the blueprint library are records rather than item stacks
+            local record = player.cursor_record
+            if record and record.valid_for_write and record.type == "blueprint" then
+                blueprint = record
+            end
+        end
+
+        if not blueprint then
+            player.print {"hextorio.snap-to-hex-grid-no-blueprint", snapping.snap_to_grid.x, snapping.snap_to_grid.y}
+            return
+        end
+
+        blueprints.apply_hex_snapping(blueprint, transformation.scale, transformation.rotation)
+    end)
 
 
     event_system.register("feature-unlocked", function(feature_name)
@@ -848,8 +879,17 @@ function hex_grid.initialize_hex(surface, hex_pos, hex_grid_scale, hex_grid_rota
         state.is_starting_hex = true
     else
         if surface.name == "fulgora" then
-            -- Chance to spawn a fulgoran-ruin-vault
-            if math.random() < lib.runtime_setting_value "vault-chance" then
+            -- Conditions for spawning a vault or attractor
+            local is_vault = false
+
+            local vault_pos = storage.hex_grid.starter_vault_position
+            if vault_pos and hex_pos.q == vault_pos.q and hex_pos.r == vault_pos.r then
+                is_vault = true
+            end
+
+            is_vault = is_vault or math.random() < lib.runtime_setting_value "vault-chance"
+
+            if is_vault then
                 local transformation = terrain.get_surface_transformation "fulgora"
                 surface.create_entity {
                     name = "fulgoran-ruin-vault",
@@ -1119,7 +1159,7 @@ function hex_grid.generate_hex_resources(surface, hex_pos, hex_grid_scale, hex_g
         elseif ore_generation_mode == "single-hex" then
             local offset_scale = 5 + resource_stroke_width
             local offset_rotation = math.random() * math.pi
-            local center_offset_hex = axial.get_hex_containing(hex_center, offset_scale, offset_rotation)
+            local center_offset_hex = axial.get_hex_containing_continuous(hex_center, offset_scale, offset_rotation)
             local offset_hex_pos
 
             if offset_scale > hex_grid_scale / 3 then
@@ -1129,7 +1169,7 @@ function hex_grid.generate_hex_resources(surface, hex_pos, hex_grid_scale, hex_g
                 -- Resource hex is small enough to be offset to an adjacent hex so that it's not completely under the hex core.
                 local closest_dist = math.huge
                 for _, adj_pos in pairs(axial.get_adjacent_hexes(center_offset_hex)) do
-                    local rect_pos = axial.get_hex_center(adj_pos, offset_scale, offset_rotation)
+                    local rect_pos = axial.get_hex_center_continuous(adj_pos, offset_scale, offset_rotation)
                     local d = rect.square_distance(rect_pos, hex_center)
                     if d < closest_dist then
                         closest_dist = d
@@ -1138,7 +1178,7 @@ function hex_grid.generate_hex_resources(surface, hex_pos, hex_grid_scale, hex_g
                 end
             end
 
-            offset_hex_center = axial.get_hex_center(offset_hex_pos, offset_scale, offset_rotation)
+            offset_hex_center = axial.get_hex_center_continuous(offset_hex_pos, offset_scale, offset_rotation)
 
             ore_positions = hex_util.get_hex_tile_positions(offset_hex_pos, offset_scale, offset_rotation, 0)
         elseif ore_generation_mode == "center-square" then
@@ -2929,7 +2969,7 @@ function hex_grid.get_hex_resource_entities(hex_core)
     local entities = hex_core.surface.find_entities_filtered {
         type = "resource",
         position = hex_core.position,
-        radius = transformation.scale * storage.constants.ROOT_THREE_OVER_TWO + 0.5,
+        radius = axial.get_hex_inradius(transformation.scale) + 0.5,
     }
 
     -- Filter out invalid entities
@@ -4484,42 +4524,62 @@ end
 ---@param surface LuaSurface
 ---@param island HexSet
 function hex_grid.on_hex_island_generated(surface, island)
-    if surface.name ~= "nauvis" then return end
+    if surface.name == "nauvis" then
+        -- Sample multiple positions for guaranteed hexaprism spawns.
 
-    local gh = storage.hex_grid.guaranteed_hexaprisms
-    if not gh then
-        gh = {} ---@type HexSet
-        storage.hex_grid.guaranteed_hexaprisms = gh
-    end
+        local gh = storage.hex_grid.guaranteed_hexaprisms
+        if not gh then
+            gh = {} ---@type HexSet
+            storage.hex_grid.guaranteed_hexaprisms = gh
+        end
 
-    local extent = hex_island.get_island_extent(surface.name)
-    local distances = hex_island.get_island_distances(surface.name)
+        local extent = hex_island.get_island_extent(surface.name)
+        local distances = hex_island.get_island_distances(surface.name)
 
-    local min_distance = extent * 0.95
-    local max_distance = extent
+        local min_distance = extent * 0.95
+        local max_distance = extent
 
-    local candidates = {}
-    for q, island_Q in pairs(island) do
-        for r, _ in pairs(island_Q) do
-            local dist_Q = distances[q]
-            if dist_Q then
-                local dist = dist_Q[r]
-                if dist and dist >= min_distance and dist <= max_distance then
+        local candidates = {}
+        for q, island_Q in pairs(island) do
+            for r, _ in pairs(island_Q) do
+                local dist_Q = distances[q]
+                if dist_Q then
+                    local dist = dist_Q[r]
+                    if dist and dist >= min_distance and dist <= max_distance then
+                        candidates[#candidates+1] = {q=q, r=r}
+                    end
+                end
+            end
+        end
+
+        for i = 1, 10 do
+            if #candidates == 0 then
+                lib.log_error("hex_grid.on_hex_island_generated: Ran out of position candidates to force hexaprism placement, after " .. (i-1) .. " successful placements.")
+                break
+            end
+
+            local pos = table.remove(candidates, math.random(1, #candidates))
+            hex_sets.add(gh, pos)
+        end
+    elseif surface.name == "fulgora" then
+        -- Sample a position for guaranteed Fulgoran ruin vault spawn.
+
+        local candidates = {}
+        local distances = hex_island.get_island_distances(surface.name)
+        for q, Q in pairs(distances) do
+            for r, dist in pairs(Q) do
+                if dist <= 2 and dist > 0 then
                     candidates[#candidates+1] = {q=q, r=r}
                 end
             end
         end
-    end
 
-    -- Sample multiple positions for guaranteed hexaprism spawns.
-    for i = 1, 10 do
         if #candidates == 0 then
-            lib.log_error("hex_grid.on_hex_island_generated: Ran out of position candidates to force hexaprism placement, after " .. (i-1) .. " successful placements.")
-            break
+            lib.log_error("hex_grid.on_hex_island_generated: No position found for Fulgoran vault ruin")
+            return
         end
 
-        local pos = table.remove(candidates, math.random(1, #candidates))
-        hex_sets.add(gh, pos)
+        storage.hex_grid.starter_vault_position = candidates[math.random(1, #candidates)]
     end
 end
 

@@ -7,6 +7,7 @@ for _, api_name in pairs{
     "util.axial",
     "util.entity",
     "util.hex",
+    "util.hex_lattice",
     "util.mgs",
     "util.rect",
 
